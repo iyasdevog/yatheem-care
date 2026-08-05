@@ -12,10 +12,8 @@ import {
   ArrowRight,
   Heart,
   UserPlus,
-  Settings,
   Tag,
   Pencil,
-  Edit,
   Calendar,
   ArrowUpDown,
   Trash2,
@@ -1006,6 +1004,119 @@ function CareOfDetail({
           onClose={() => setShowRename(false)}
           onSave={newName => onRenameCareOf(co, newName)}
         />
+      )}
+    </div>
+  );
+}
+
+// ── STATUS LIST PANEL ────────────────────────────────────────────────────────
+function StatusList({ donors, status, onBack, onSelectDonor }: {
+  donors: DonorRecord[];
+  status: string;
+  onBack: () => void;
+  onSelectDonor: (d: DonorRecord) => void;
+}) {
+  const [q, setQ] = useState('');
+  const filtered = donors.filter(d =>
+    !q || d.donorName.toLowerCase().includes(q.toLowerCase()) || d.phoneNumber.includes(q)
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <button className="btn btn-secondary btn-sm" onClick={onBack}>← Back</button>
+        <h2 style={{ fontSize: '1.1rem', margin: 0 }}>{status} ({donors.length})</h2>
+      </div>
+      <div style={{ position: 'relative' }}>
+        <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+        <input className="input-field" style={{ paddingLeft: 36 }} placeholder="Search name or phone..." value={q} onChange={e => setQ(e.target.value)} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {filtered.map(d => (
+          <button key={d.id} onClick={() => onSelectDonor(d)}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', textAlign: 'left', width: '100%', fontFamily: 'inherit' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{d.donorName || d.phoneNumber}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <StatusDot status={d.statusInfo.label} />
+                {d.statusInfo.label} · {d.phoneNumber}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 800, color: '#10b981', fontSize: '0.9rem' }}>{formatINR(d.totalPaid)}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Bal {formatINR(d.balanceRemaining)}</div>
+            </div>
+          </button>
+        ))}
+        {filtered.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>No results found.</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── SEARCH RESULTS PANEL ─────────────────────────────────────────────────────
+function SearchResults({ donors, careOfs, query, onBack, onSelectDonor, onSelectCareOf }: {
+  donors: DonorRecord[];
+  careOfs: CareOfSummary[];
+  query: string;
+  onBack: () => void;
+  onSelectDonor: (d: DonorRecord) => void;
+  onSelectCareOf: (co: CareOfSummary) => void;
+}) {
+  const q = query.toLowerCase();
+  const matchedDonors = donors.filter(d =>
+    d.donorName.toLowerCase().includes(q) ||
+    d.phoneNumber.includes(q) ||
+    d.rawPhone.includes(q) ||
+    d.careOf.toLowerCase().includes(q) ||
+    d.transactions.some(t => t.voucherNo.toLowerCase().includes(q))
+  );
+  const matchedCareOfs = careOfs.filter(co => co.careOfName.toLowerCase().includes(q));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <button className="btn btn-secondary btn-sm" onClick={onBack}>← Back</button>
+        <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Results for "{query}"</h2>
+      </div>
+
+      {matchedDonors.length > 0 && (
+        <div>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Donors ({matchedDonors.length})</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {matchedDonors.map(d => (
+              <button key={d.id} onClick={() => onSelectDonor(d)}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', textAlign: 'left', width: '100%', fontFamily: 'inherit' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{d.donorName || d.phoneNumber}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{d.phoneNumber} · C/O: {d.careOf || 'Direct'}</div>
+                </div>
+                <div style={{ fontWeight: 800, color: '#10b981' }}>{formatINR(d.totalPaid)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {matchedCareOfs.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Care Of Groups ({matchedCareOfs.length})</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {matchedCareOfs.map(co => (
+              <button key={co.careOfName} onClick={() => onSelectCareOf(co)}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', textAlign: 'left', width: '100%', fontFamily: 'inherit' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{co.careOfName}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{co.donorCount} donors</div>
+                </div>
+                <div style={{ fontWeight: 800, color: '#10b981' }}>{formatINR(co.totalCollected)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {matchedDonors.length === 0 && matchedCareOfs.length === 0 && (
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '3rem' }}>No results found for "{query}"</p>
       )}
     </div>
   );

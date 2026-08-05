@@ -5,32 +5,20 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    // Target modern browsers for smaller output
     target: 'es2020',
-    // Enable CSS code splitting
     cssCodeSplit: true,
-    // Compress assets
-    minify: 'esbuild',
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // Split large vendor chunks
-        manualChunks: {
-          // React core
-          'react-vendor': ['react', 'react-dom'],
-          // Firebase
-          'firebase-vendor': ['firebase/app', 'firebase/firestore'],
-          // XLSX / file processing
-          'xlsx-vendor': ['xlsx'],
-          // Lucide icons
-          'icons-vendor': ['lucide-react'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('xlsx')) return 'xlsx';
+            if (id.includes('firebase')) return 'firebase';
+            if (id.includes('lucide-react')) return 'icons';
+            return 'vendor';
+          }
         },
-        // Organize output files
-        chunkFileNames: 'assets/js/[name]-[hash].js',
-        entryFileNames: 'assets/js/[name]-[hash].js',
-        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
       },
     },
-    // Increase warning threshold since we've split chunks
-    chunkSizeWarningLimit: 600,
   },
 })

@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Tag, Building2, Check } from 'lucide-react';
+import { X, Plus, Trash2, Tag, Check } from 'lucide-react';
 import {
   type DonationSlab,
   type SlabAssignment,
-  DEFAULT_SLABS,
   addSlab,
   deleteSlab,
   assignDonorToSlab,
@@ -16,7 +15,7 @@ import type { DonorRecord } from '../utils/donationAggregator';
 interface SlabManagerProps {
   slabs: DonationSlab[];
   slabAssignments: SlabAssignment[];
-  donors: DonorRecordType[];
+  donors: DonorRecord[];
   onClose: () => void;
   onSlabsChange: (slabs: DonationSlab[]) => void;
   onAssignmentsChange: (assignments: SlabAssignment[]) => void;
@@ -52,7 +51,7 @@ export const SlabManager: React.FC<SlabManagerProps> = ({
 
   // ── Assign Tab State ──
   const [searchQ, setSearchQ] = useState('');
-  const [assigningDonor, setAssigningDonor] = useState<DonorRecordType | null>(null);
+  const [assigningDonor, setAssigningDonor] = useState<DonorRecord | null>(null);
   const [selectedSlabId, setSelectedSlabId] = useState('');
   const [selectedUnits, setSelectedUnits] = useState(1);
   const [filterAssigned, setFilterAssigned] = useState<'all' | 'assigned' | 'unassigned'>('all');
@@ -106,7 +105,7 @@ export const SlabManager: React.FC<SlabManagerProps> = ({
     onSlabsChange(updated);
   };
 
-  const openAssign = (donor: DonorRecordType) => {
+  const openAssign = (donor: DonorRecord) => {
     setAssigningDonor(donor);
     const existing = slabAssignments.find(a => a.phoneNumber === donor.rawPhone);
     if (existing) {

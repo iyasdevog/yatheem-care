@@ -68,7 +68,6 @@ export function addSlab(slabs: DonationSlab[], newSlab: Omit<DonationSlab, 'id' 
 }
 
 export function deleteSlab(slabs: DonationSlab[], slabId: string): DonationSlab[] {
-  const updated = slabs.filter(s => s.id !== slabId || s.isDefault === false ? s.id !== slabId : true);
   // Only allow deleting non-default slabs
   const filtered = slabs.filter(s => s.id !== slabId || s.isDefault);
   saveSlabs(filtered);

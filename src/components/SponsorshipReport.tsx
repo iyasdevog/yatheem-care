@@ -30,7 +30,6 @@ interface SponsorshipReportProps {
 
 export const SponsorshipReport: React.FC<SponsorshipReportProps> = ({
   transactionDataset,
-  masterDataset,
   slabs,
   slabAssignments,
 }) => {
