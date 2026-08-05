@@ -67,9 +67,14 @@ export function addSlab(slabs: DonationSlab[], newSlab: Omit<DonationSlab, 'id' 
   return updated;
 }
 
+export function updateSlab(slabs: DonationSlab[], updatedSlab: DonationSlab): DonationSlab[] {
+  const updated = slabs.map(s => (s.id === updatedSlab.id ? updatedSlab : s));
+  saveSlabs(updated);
+  return updated;
+}
+
 export function deleteSlab(slabs: DonationSlab[], slabId: string): DonationSlab[] {
-  // Only allow deleting non-default slabs
-  const filtered = slabs.filter(s => s.id !== slabId || s.isDefault);
+  const filtered = slabs.filter(s => s.id !== slabId);
   saveSlabs(filtered);
   return filtered;
 }

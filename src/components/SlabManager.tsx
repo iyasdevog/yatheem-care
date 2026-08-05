@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Tag, Check } from 'lucide-react';
+import { X, Plus, Trash2, Tag, Check, Pencil } from 'lucide-react';
 import {
   type DonationSlab,
   type SlabAssignment,
   addSlab,
+  updateSlab,
   deleteSlab,
   assignDonorToSlab,
   removeDonorAssignment,
@@ -48,6 +49,9 @@ export const SlabManager: React.FC<SlabManagerProps> = ({
   const [newUnit, setNewUnit] = useState('student');
   const [newColor, setNewColor] = useState(COLORS[6]);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // ── Edit Slab State ──
+  const [editingSlab, setEditingSlab] = useState<DonationSlab | null>(null);
 
   // ── Assign Tab State ──
   const [searchQ, setSearchQ] = useState('');
@@ -98,6 +102,12 @@ export const SlabManager: React.FC<SlabManagerProps> = ({
     onSlabsChange(updated);
     setNewCategory(''); setNewLabel(''); setNewAmount(''); setNewUnit('student');
     setShowAddForm(false);
+  };
+
+  const handleUpdateSlab = (updatedSlab: DonationSlab) => {
+    const updated = updateSlab(slabs, updatedSlab);
+    onSlabsChange(updated);
+    setEditingSlab(null);
   };
 
   const handleDeleteSlab = (slabId: string) => {
@@ -228,15 +238,24 @@ export const SlabManager: React.FC<SlabManagerProps> = ({
                           <div style={{ fontWeight: 800, color: slab.color, fontSize: '1rem' }}>
                             {formatINR(slab.amount)}
                           </div>
-                          {!slab.isDefault && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <button
                               className="btn btn-ghost btn-icon"
-                              style={{ color: '#ef4444' }}
+                              title="Edit slab"
+                              onClick={() => setEditingSlab(slab)}
+                              style={{ padding: 4 }}
+                            >
+                              <Pencil size={14} color="var(--text-muted)" />
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-icon"
+                              style={{ color: '#ef4444', padding: 4 }}
+                              title="Delete slab"
                               onClick={() => handleDeleteSlab(slab.id)}
                             >
                               <Trash2 size={14} />
                             </button>
-                          )}
+                          </div>
                         </div>
                       );
                     })}
@@ -502,6 +521,103 @@ export const SlabManager: React.FC<SlabManagerProps> = ({
             </div>
           )}
         </div>
+
+        {/* Edit Slab Modal */}
+        {editingSlab && (
+          <div className="modal-overlay" onClick={() => setEditingSlab(null)}>
+            <div className="modal-container" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Pencil size={18} color="var(--accent-primary)" />
+                  <h3 style={{ fontSize: '1rem', margin: 0 }}>Edit Sponsorship Slab</h3>
+                </div>
+                <button className="btn btn-ghost btn-icon" onClick={() => setEditingSlab(null)}><X size={18} /></button>
+              </div>
+              <div className="modal-body">
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                    Category
+                  </label>
+                  <input
+                    className="input-field"
+                    value={editingSlab.category}
+                    onChange={e => setEditingSlab({ ...editingSlab, category: e.target.value })}
+                    placeholder="e.g. Education, Food"
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                      Label
+                    </label>
+                    <input
+                      className="input-field"
+                      value={editingSlab.label}
+                      onChange={e => setEditingSlab({ ...editingSlab, label: e.target.value })}
+                      placeholder="e.g. Full, Half, Quarter"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                      Target Amount (₹)
+                    </label>
+                    <input
+                      className="input-field"
+                      type="number"
+                      value={editingSlab.amount}
+                      onChange={e => setEditingSlab({ ...editingSlab, amount: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                      Unit Name
+                    </label>
+                    <input
+                      className="input-field"
+                      value={editingSlab.unit}
+                      onChange={e => setEditingSlab({ ...editingSlab, unit: e.target.value })}
+                      placeholder="student"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                      Color Theme
+                    </label>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                      {COLORS.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setEditingSlab({ ...editingSlab, color: c })}
+                          style={{
+                            width: 22, height: 22, borderRadius: '50%', background: c,
+                            border: editingSlab.color === c ? '2px solid #fff' : 'none',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+                <button
+                  className="btn btn-ghost"
+                  style={{ color: '#ef4444' }}
+                  onClick={() => { handleDeleteSlab(editingSlab.id); setEditingSlab(null); }}
+                >
+                  <Trash2 size={14} style={{ marginRight: 4 }} /> Delete Slab
+                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-ghost" onClick={() => setEditingSlab(null)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={() => handleUpdateSlab(editingSlab)}>Save Slab Changes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
