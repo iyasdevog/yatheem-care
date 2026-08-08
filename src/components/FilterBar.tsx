@@ -136,7 +136,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             >
               <option value="">No Grouping</option>
               {columns
-                .filter(col => !/टाइमस्टैम्प|timestamp|तारीख/i.test(col.id) && !/टाइमस्टैम्प|timestamp|तारीख/i.test(col.label))
+                .filter(col => !/तारीख/i.test(col.id) && !/तारीख/i.test(col.label))
                 .map(col => (
                   <option key={col.id} value={col.id}>
                     Group by: {col.label}

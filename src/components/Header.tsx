@@ -23,9 +23,6 @@ import {
 import type { Dataset } from '../types/data';
 
 interface HeaderProps {
-  datasets: Dataset[];
-  activeDatasetId: string;
-  onSelectDataset: (id: string) => void;
   onOpenImportModal: () => void;
   onOpenAddRowModal: () => void;
   onLoadSample?: (dataset: Dataset) => void;
@@ -41,9 +38,6 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  datasets,
-  activeDatasetId,
-  onSelectDataset,
   onOpenImportModal,
   onOpenAddRowModal,
   onExportCSV,
@@ -118,19 +112,6 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Dataset Selector Dropdown */}
-          <select
-            className="input-field select-field"
-            style={{ minWidth: '180px', flex: '1 1 200px', fontWeight: 600, fontSize: '0.85rem' }}
-            value={activeDatasetId}
-            onChange={(e) => onSelectDataset(e.target.value)}
-          >
-            {datasets.map(d => (
-              <option key={d.id} value={d.id}>
-                {d.name} ({d.rows.length} rows)
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Center View Navigation Tabs - Scrollable on Mobile */}

@@ -594,18 +594,8 @@ export const App: React.FC = () => {
 
       {/* Navigation Header */}
       <Header
-        datasets={datasets}
-        activeDatasetId={activeDatasetId}
-        onSelectDataset={setActiveDatasetId}
         onOpenImportModal={() => setShowImportModal(true)}
         onOpenAddRowModal={() => setShowAddRowModal(true)}
-        onLoadSample={(sample) => {
-          if (!datasets.some(d => d.id === sample.id)) {
-            setDatasets(prev => [sample, ...prev]);
-          }
-          setActiveDatasetId(sample.id);
-          addToast('info', 'Sample Dataset Loaded', sample.name);
-        }}
         onExportCSV={handleExportCSV}
         onExportExcel={handleExportExcel}
         onCopyGoogleSheets={handleCopyGoogleSheets}
@@ -613,7 +603,6 @@ export const App: React.FC = () => {
         onChangeView={setActiveView}
         theme={theme}
         onToggleTheme={() => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))}
-        sampleDatasets={[]}
         firebaseSyncStatus={firebaseSyncStatus}
       />
 

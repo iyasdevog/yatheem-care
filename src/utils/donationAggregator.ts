@@ -108,8 +108,7 @@ export function parseTransactions(rows: RowData[]): TransactionEntry[] {
   const parsed = rows.map((r, idx) => {
     // Support both English and Hindi Google Form column headers
     const rawDate =
-      r['Date'] ?? r['DATE'] ?? r['Timestamp'] ??
-      r['टाइमस्टैम्प'] ?? r['तारीख'] ?? null;
+      r['Date'] ?? r['DATE'] ?? r['तारीख'] ?? null;
 
     const dateObj = parseFlexibleDate(rawDate);
 

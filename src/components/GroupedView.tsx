@@ -19,7 +19,7 @@ export const GroupedView: React.FC<GroupedViewProps> = ({
   const visibleColumns = columns.filter(c => c.visible).sort((a, b) => a.order - b.order);
 
   // Skip timestamp/date/Hindi columns — prefer categorical columns
-  const SKIP_COLS = /टाइमस्टैम्प|timestamp|date|तारीख/i;
+  const SKIP_COLS = /date|तारीख/i;
   const PREFER_COLS = /c\/o|care.?of|mode|careof|name|status/i;
 
   const activeGroupColId =
