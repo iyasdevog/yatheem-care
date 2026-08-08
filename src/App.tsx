@@ -36,6 +36,7 @@ import {
   type DonationSlab,
   type SlabAssignment,
 } from './utils/slabManager';
+import { loadYatheemExcelWorkbook } from './utils/excelLoader';
 import { DonorStandardizer } from './components/DonorStandardizer';
 import {
   loadDonorAliasMap,
@@ -148,6 +149,20 @@ export const App: React.FC = () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(datasets));
     } catch (e) {
       console.error('Failed to save datasets to localStorage', e);
+    }
+  }, [datasets]);
+
+  // Auto-load 1-time Excel data from /Sponsors (Responses).xlsx if empty
+  useEffect(() => {
+    const hasData = datasets.some(d => d.rows.length > 0);
+    if (!hasData) {
+      loadYatheemExcelWorkbook().then(wb => {
+        if (wb?.transactionDataset && wb.transactionDataset.rows.length > 0) {
+          setDatasets([wb.transactionDataset]);
+          saveDatasetMetadataToFirebase(wb.transactionDataset);
+          saveMultipleRowsToFirebase(wb.transactionDataset.id, wb.transactionDataset.rows);
+        }
+      });
     }
   }, [datasets]);
 
