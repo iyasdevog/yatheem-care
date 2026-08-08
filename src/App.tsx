@@ -14,11 +14,14 @@ import { ColumnManagerModal } from './components/ColumnManagerModal';
 import { AddRowModal } from './components/AddRowModal';
 import { ImportModal } from './components/ImportModal';
 import { ToastContainer, type ToastMessage } from './components/Toast';
-import { loadYatheemExcelWorkbook } from './utils/excelLoader';
 import {
-  syncAllDatasetsToFirebase,
-  saveDatasetToFirebase,
-  subscribeToFirebaseDatasets,
+  saveDatasetMetadataToFirebase,
+  saveRowToFirebase,
+  deleteRowFromFirebase,
+  saveMultipleRowsToFirebase,
+  subscribeToDatasetMetadata,
+  subscribeToDatasetRows,
+  migrateDatasetRowsIfNeeded,
 } from './utils/firebaseSync';
 import {
   loadSlabs,
@@ -105,49 +108,74 @@ export const App: React.FC = () => {
     }
   }, [datasets]);
 
-  // Load current Yatheem Excel dataset & sync with Firebase
+  // ---- Firebase startup: migrate old data, subscribe to metadata + rows ----
   useEffect(() => {
-    // Only load from Excel if we have no local datasets at all
-    if (datasets.length === 0) {
-      loadYatheemExcelWorkbook().then((wb) => {
-        if (wb) {
-          // Only transaction dataset now — template sheet is ignored
-          const yatheemDatasets = [wb.transactionDataset];
-          setDatasets(yatheemDatasets);
-          setActiveDatasetId(wb.transactionDataset.id);
+    const unsubscribers: (() => void)[] = [];
 
-          syncAllDatasetsToFirebase(yatheemDatasets).catch(err =>
-            console.warn('Firebase sync notice:', err)
-          );
-        }
+    // Step 1: run migration for all known datasets (safe no-op if already migrated)
+    const knownDatasetIds = datasets.map(d => d.id);
+    if (knownDatasetIds.length > 0) {
+      Promise.all(knownDatasetIds.map(id => migrateDatasetRowsIfNeeded(id)))
+        .catch(err => console.warn('Migration notice:', err));
+    }
+
+    // Step 2: Subscribe to dataset metadata changes from Firebase
+    const unsubMeta = subscribeToDatasetMetadata((remoteMetaList) => {
+      setDatasets(prev => {
+        let changed = false;
+        const updated = prev.map(p => {
+          const remoteMeta = remoteMetaList.find(r => r.id === p.id);
+          if (remoteMeta) {
+            const remoteTime = new Date(remoteMeta.updatedAt).getTime();
+            const localTime = new Date(p.updatedAt).getTime();
+            if (remoteTime > localTime + 1000) {
+              changed = true;
+              return { ...p, ...remoteMeta }; // merge metadata, keep local rows
+            }
+          }
+          return p;
+        });
+        // Add any brand-new datasets from remote that we don't have locally
+        const prevIds = new Set(prev.map(p => p.id));
+        const newFromRemote = remoteMetaList
+          .filter(r => !prevIds.has(r.id))
+          .map(r => ({ ...r, rows: [] } as Dataset));
+        if (newFromRemote.length > 0) changed = true;
+        return changed ? [...updated, ...newFromRemote] : prev;
       });
-    } else {
-      // We have local datasets that might not have synced successfully to Firebase previously.
-      // Force a sync to cloud now that sanitizeForFirebase is implemented.
+    });
+    unsubscribers.push(unsubMeta);
+
+    // Step 3: Subscribe to row-level changes for each dataset we know about
+    knownDatasetIds.forEach(id => {
+      const unsubRows = subscribeToDatasetRows(id, (remoteRows) => {
+        setDatasets(prev => prev.map(d => {
+          if (d.id !== id) return d;
+          return { ...d, rows: remoteRows };
+        }));
+      });
+      unsubscribers.push(unsubRows);
+    });
+
+    // Step 4: Push any local data (that may not have reached Firebase yet) as metadata + rows
+    if (datasets.length > 0) {
       setFirebaseSyncStatus('syncing');
-      syncAllDatasetsToFirebase(datasets)
+      const syncAll = datasets.map(async d => {
+        await saveDatasetMetadataToFirebase(d);
+        await saveMultipleRowsToFirebase(d.id, d.rows);
+      });
+      Promise.all(syncAll)
         .then(() => {
           setFirebaseSyncStatus('synced');
           setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
         })
         .catch(err => {
-          console.warn('Firebase sync notice:', err);
+          console.warn('Firebase initial sync notice:', err);
           setFirebaseSyncStatus('error');
         });
     }
 
-    // Real-time listener for Firebase Firestore updates
-    const unsubscribe = subscribeToFirebaseDatasets((remoteDatasets) => {
-      if (remoteDatasets && remoteDatasets.length > 0) {
-        setDatasets(prev => {
-          const remoteIds = new Set(remoteDatasets.map(r => r.id));
-          const localOnly = prev.filter(p => !remoteIds.has(p.id));
-          return [...remoteDatasets, ...localOnly];
-        });
-      }
-    });
-
-    return () => unsubscribe();
+    return () => unsubscribers.forEach(u => u());
   }, []);
 
   // View mode
@@ -183,14 +211,15 @@ export const App: React.FC = () => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  // Helper to update current dataset & sync to Firebase
+  // Helper to update current dataset metadata & sync to Firebase
   const updateCurrentDataset = (updater: (ds: Dataset) => Dataset) => {
     setDatasets(prev =>
       prev.map(d => {
         if (d.id === currentDataset.id) {
           const updated = updater(d);
-          saveDatasetToFirebase(updated).catch(err =>
-            console.warn('Firebase update notice:', err)
+          // Only metadata has changed (column schema, name, etc.) — no row sync needed
+          saveDatasetMetadataToFirebase(updated).catch(err =>
+            console.warn('Firebase metadata update notice:', err)
           );
           return updated;
         }
@@ -343,7 +372,7 @@ export const App: React.FC = () => {
     };
 
     setDatasets(prev => prev.map(d => (d.id === txDs.id ? updatedDs : d)));
-    
+
     // Auto-assign slab if selected
     if (newDonor.slabId && newDonor.phone) {
       handleAssignmentsChange(assignDonorToSlab(
@@ -354,14 +383,18 @@ export const App: React.FC = () => {
       ));
     }
 
+    // Granular Firebase write: only save the new row + update metadata timestamp
     setFirebaseSyncStatus('syncing');
-    saveDatasetToFirebase(updatedDs)
+    Promise.all([
+      saveRowToFirebase(updatedDs.id, newRow),
+      saveDatasetMetadataToFirebase(updatedDs),
+    ])
       .then(() => {
         setFirebaseSyncStatus('synced');
         setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
       })
       .catch((err) => {
-        console.error("Firebase sync error:", err);
+        console.error('Firebase sync error:', err);
         setFirebaseSyncStatus('error');
       });
 
@@ -377,9 +410,12 @@ export const App: React.FC = () => {
   const handleImportDataset = (newDs: Dataset) => {
     setDatasets(prev => [newDs, ...prev]);
     setActiveDatasetId(newDs.id);
-    // Also sync newly imported dataset to Firebase
+    // Granular Firebase write: save all rows in batches + metadata
     setFirebaseSyncStatus('syncing');
-    saveDatasetToFirebase(newDs)
+    Promise.all([
+      saveDatasetMetadataToFirebase(newDs),
+      saveMultipleRowsToFirebase(newDs.id, newDs.rows),
+    ])
       .then(() => {
         setFirebaseSyncStatus('synced');
         setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
@@ -423,17 +459,27 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateTransactionRow = (rowId: string, updates: Record<string, any>) => {
+    const dsId = currentDataset.id === 'yatheem_transactions' ? 'yatheem_transactions' : currentDataset.id;
     setDatasets(prev =>
       prev.map(d => {
-        if (d.id === 'yatheem_transactions' || d.id === currentDataset.id) {
+        if (d.id === dsId) {
+          const updatedRow = { ...d.rows.find(r => r._id === rowId), ...updates } as RowData;
           const updated = {
             ...d,
-            rows: d.rows.map(r => (r._id === rowId ? { ...r, ...updates } : r)),
+            rows: d.rows.map(r => (r._id === rowId ? updatedRow : r)),
             updatedAt: new Date().toISOString(),
           };
-          saveDatasetToFirebase(updated).catch(err =>
-            console.warn('Firebase update notice:', err)
-          );
+          // Only push the single changed row to Firebase
+          setFirebaseSyncStatus('syncing');
+          saveRowToFirebase(dsId, updatedRow)
+            .then(() => {
+              setFirebaseSyncStatus('synced');
+              setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
+            })
+            .catch(err => {
+              console.warn('Firebase update notice:', err);
+              setFirebaseSyncStatus('error');
+            });
           return updated;
         }
         return d;
@@ -444,17 +490,24 @@ export const App: React.FC = () => {
 
   const handleUpdateMultipleTransactionRows = (rowIds: string[], updates: Record<string, any>) => {
     const idSet = new Set(rowIds);
+    const dsId = currentDataset.id;
     setDatasets(prev =>
       prev.map(d => {
-        if (d.id === 'yatheem_transactions' || d.id === currentDataset.id) {
-          const updated = {
-            ...d,
-            rows: d.rows.map(r => (idSet.has(String(r._id)) ? { ...r, ...updates } : r)),
-            updatedAt: new Date().toISOString(),
-          };
-          saveDatasetToFirebase(updated).catch(err =>
-            console.warn('Firebase update notice:', err)
-          );
+        if (d.id === dsId) {
+          const updatedRows = d.rows.map(r => (idSet.has(String(r._id)) ? { ...r, ...updates } : r));
+          const updated = { ...d, rows: updatedRows, updatedAt: new Date().toISOString() };
+          // Save only the changed rows in a single batch
+          const changedRows = updatedRows.filter(r => idSet.has(String(r._id)));
+          setFirebaseSyncStatus('syncing');
+          saveMultipleRowsToFirebase(dsId, changedRows)
+            .then(() => {
+              setFirebaseSyncStatus('synced');
+              setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
+            })
+            .catch(err => {
+              console.warn('Firebase batch update notice:', err);
+              setFirebaseSyncStatus('error');
+            });
           return updated;
         }
         return d;
@@ -464,17 +517,26 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteTransactionRow = (rowId: string) => {
+    const dsId = currentDataset.id;
     setDatasets(prev =>
       prev.map(d => {
-        if (d.id === 'yatheem_transactions' || d.id === currentDataset.id) {
+        if (d.id === dsId) {
           const updated = {
             ...d,
             rows: d.rows.filter(r => String(r._id) !== rowId),
             updatedAt: new Date().toISOString(),
           };
-          saveDatasetToFirebase(updated).catch(err =>
-            console.warn('Firebase update notice:', err)
-          );
+          // Only delete the single row document from Firestore
+          setFirebaseSyncStatus('syncing');
+          deleteRowFromFirebase(dsId, rowId)
+            .then(() => {
+              setFirebaseSyncStatus('synced');
+              setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
+            })
+            .catch(err => {
+              console.warn('Firebase delete notice:', err);
+              setFirebaseSyncStatus('error');
+            });
           return updated;
         }
         return d;
