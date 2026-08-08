@@ -4,14 +4,12 @@ import {
   Plus,
   Upload,
   Download,
-  Copy,
   FileCode,
   Sun,
   Moon,
   Sparkles,
   Table as TableIcon,
   BarChart3,
-  Check,
   Cloud,
   CloudOff,
   Loader2,
@@ -28,7 +26,6 @@ interface HeaderProps {
   onLoadSample?: (dataset: Dataset) => void;
   onExportCSV: () => void;
   onExportExcel: () => void;
-  onCopyGoogleSheets: () => void;
   activeView: 'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics' | 'standardizer';
   onChangeView: (view: 'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics' | 'standardizer') => void;
   theme: 'dark' | 'light';
@@ -42,7 +39,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAddRowModal,
   onExportCSV,
   onExportExcel,
-  onCopyGoogleSheets,
   activeView,
   onChangeView,
   theme,
@@ -50,14 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
   firebaseSyncStatus = 'idle',
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [copiedState, setCopiedState] = useState(false);
-
-  const handleCopySheets = () => {
-    onCopyGoogleSheets();
-    setCopiedState(true);
-    setTimeout(() => setCopiedState(false), 2000);
-    setShowExportMenu(false);
-  };
 
   return (
     <header className="glass-panel" style={{ margin: '1rem', padding: '0.85rem 1.5rem', borderRadius: 'var(--radius-lg)' }}>
@@ -210,14 +198,6 @@ export const Header: React.FC<HeaderProps> = ({
                   gap: '4px',
                 }}
               >
-                <button
-                  className="btn btn-ghost"
-                  style={{ justifyContent: 'flex-start', width: '100%' }}
-                  onClick={handleCopySheets}
-                >
-                  {copiedState ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
-                  Copy to Google Sheets (Ctrl+V)
-                </button>
                 <button
                   className="btn btn-ghost"
                   style={{ justifyContent: 'flex-start', width: '100%' }}

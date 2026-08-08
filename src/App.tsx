@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Dataset, ColumnSchema, RowData, SortRule, FilterRule } from './types/data';
 
-import { exportToCSV, exportToExcel, copyToGoogleSheetsFormat } from './utils/csvParser';
+import { exportToCSV, exportToExcel } from './utils/csvParser';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
 import { DataTable } from './components/DataTable';
@@ -502,18 +502,17 @@ export const App: React.FC = () => {
     addToast('success', 'Excel File Downloaded', `Saved ${filteredAndSortedRows.length} rows as .xlsx`);
   };
 
-  const handleCopyGoogleSheets = () => {
-    const tsvText = copyToGoogleSheetsFormat(currentDataset.columns, filteredAndSortedRows);
-    navigator.clipboard.writeText(tsvText);
-    addToast('success', 'Copied to Clipboard!', 'Press Ctrl+V in Google Sheets to paste into exact headings');
-  };
-
   const handleCopySelectedRows = (rowIds: string[]) => {
     const idSet = new Set(rowIds);
     const selectedRows = currentDataset.rows.filter(r => idSet.has(String(r._id)));
-    const tsvText = copyToGoogleSheetsFormat(currentDataset.columns, selectedRows);
+    const visibleCols = currentDataset.columns.filter(c => c.visible).sort((a, b) => a.order - b.order);
+    const headerLine = visibleCols.map(c => c.label).join('\t');
+    const rowLines = selectedRows.map(row => {
+      return visibleCols.map(c => String(row[c.id] ?? '').replace(/[\t\n\r]+/g, ' ')).join('\t');
+    });
+    const tsvText = [headerLine, ...rowLines].join('\n');
     navigator.clipboard.writeText(tsvText);
-    addToast('success', 'Selected Rows Copied', `Ready to paste ${selectedRows.length} rows into Google Sheets`);
+    addToast('success', 'Selected Rows Copied', `Copied ${selectedRows.length} rows to clipboard`);
   };
 
   const handleUpdateTransactionRow = (rowId: string, updates: Record<string, any>) => {
@@ -613,7 +612,6 @@ export const App: React.FC = () => {
         onOpenAddRowModal={() => setShowAddRowModal(true)}
         onExportCSV={handleExportCSV}
         onExportExcel={handleExportExcel}
-        onCopyGoogleSheets={handleCopyGoogleSheets}
         activeView={activeView}
         onChangeView={setActiveView}
         theme={theme}
