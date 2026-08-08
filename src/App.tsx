@@ -29,6 +29,10 @@ import {
   loadSlabAssignments,
   saveSlabAssignments,
   assignDonorToSlab,
+  saveSlabsToFirebase,
+  saveAssignmentToFirebase,
+  subscribeToSlabs,
+  subscribeToAssignments,
   type DonationSlab,
   type SlabAssignment,
 } from './utils/slabManager';
@@ -73,14 +77,38 @@ export const App: React.FC = () => {
   const [slabAssignments, setSlabAssignments] = useState<SlabAssignment[]>(() => loadSlabAssignments());
 
   const handleSlabsChange = (updated: DonationSlab[]) => {
-    saveSlabs(updated);
+    saveSlabs(updated);          // localStorage (offline-first)
     setSlabs(updated);
+    saveSlabsToFirebase(updated) // Firebase (background)
+      .catch(err => console.warn('Slab Firebase sync error:', err));
   };
 
   const handleAssignmentsChange = (updated: SlabAssignment[]) => {
-    saveSlabAssignments(updated);
+    saveSlabAssignments(updated);  // localStorage (offline-first)
     setSlabAssignments(updated);
+    // Push each newly changed assignment to Firebase
+    updated.forEach(a => {
+      saveAssignmentToFirebase(a)
+        .catch(err => console.warn('Assignment Firebase sync error:', err));
+    });
   };
+
+  // Subscribe to Firebase slab & assignment changes (other devices / cloud edits)
+  useEffect(() => {
+    const unsubSlabs = subscribeToSlabs((remoteSlabs) => {
+      setSlabs(prev => {
+        // Only update if cloud has newer data than localStorage
+        const localUpdated = prev.map(s => s.id).sort().join(',');
+        const remoteUpdated = remoteSlabs.map(s => s.id).sort().join(',');
+        return localUpdated !== remoteUpdated ? remoteSlabs : prev;
+      });
+    });
+    const unsubAssignments = subscribeToAssignments((remoteAssignments) => {
+      setSlabAssignments(remoteAssignments);
+      saveSlabAssignments(remoteAssignments); // keep localStorage in sync
+    });
+    return () => { unsubSlabs(); unsubAssignments(); };
+  }, []);
 
   const [activeDatasetId, setActiveDatasetId] = useState<string>(() => {
     return datasets[0]?.id || 'yatheem_transactions';

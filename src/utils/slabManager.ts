@@ -1,4 +1,15 @@
 // ── Slab & Assignment Types ────────────────────────────────────────────────
+import {
+  collection,
+  doc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore';
+import { db } from '../firebase';
+import { sanitizeForFirebase } from './firebaseSync';
+
 
 export interface DonationSlab {
   id: string;
@@ -15,6 +26,7 @@ export interface SlabAssignment {
   slabId: string;
   units: number;        // how many units (students) e.g. 3 → 3 × ₹50,000 = ₹1,50,000
   assignedAt: string;   // ISO date
+  updatedAt: string;    // ISO date
   note?: string;
 }
 
@@ -104,11 +116,13 @@ export function assignDonorToSlab(
   note?: string
 ): SlabAssignment[] {
   const filtered = assignments.filter(a => a.phoneNumber !== phoneNumber);
+  const now = new Date().toISOString();
   const newAssignment: SlabAssignment = {
     phoneNumber,
     slabId,
     units: Math.max(1, units),
-    assignedAt: new Date().toISOString(),
+    assignedAt: now,
+    updatedAt: now,
     note,
   };
   const updated = [...filtered, newAssignment];
@@ -191,4 +205,85 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 export function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] ?? '#f59e0b';
+}
+
+// ── Firebase Sync (Slabs & Assignments) ───────────────────────────────────
+
+const SLABS_COLLECTION = 'slabs';
+const ASSIGNMENTS_COLLECTION = 'slabAssignments';
+
+/**
+ * Syncs all slabs to Firebase /slabs collection.
+ * Each slab is its own document (ID = slab.id).
+ */
+export async function saveSlabsToFirebase(slabs: DonationSlab[]): Promise<void> {
+  if (slabs.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    slabs.forEach(slab => {
+      const clean = sanitizeForFirebase({ ...slab, updatedAt: now, lastSyncedAt: serverTimestamp() });
+      batch.set(doc(db, SLABS_COLLECTION, slab.id), clean, { merge: true });
+    });
+    await batch.commit();
+  } catch (err) {
+    console.error('Failed to save slabs to Firebase:', err);
+  }
+}
+
+/**
+ * Saves a single slab assignment to Firebase.
+ * Document ID = phoneNumber (one active assignment per donor).
+ */
+export async function saveAssignmentToFirebase(assignment: SlabAssignment): Promise<void> {
+  try {
+    const clean = sanitizeForFirebase({ ...assignment, lastSyncedAt: serverTimestamp() });
+    await setDoc(doc(db, ASSIGNMENTS_COLLECTION, assignment.phoneNumber), clean, { merge: true });
+  } catch (err) {
+    console.error('Failed to save assignment to Firebase:', err);
+  }
+}
+
+/**
+ * Real-time listener for slab configuration.
+ */
+export function subscribeToSlabs(
+  onUpdate: (slabs: DonationSlab[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    collection(db, SLABS_COLLECTION),
+    (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) return;
+      const slabs: DonationSlab[] = [];
+      snapshot.forEach(d => slabs.push(d.data() as DonationSlab));
+      if (slabs.length > 0) onUpdate(slabs);
+    },
+    (err) => {
+      console.warn('Realtime slabs sync error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Real-time listener for all slab assignments.
+ */
+export function subscribeToAssignments(
+  onUpdate: (assignments: SlabAssignment[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    collection(db, ASSIGNMENTS_COLLECTION),
+    (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) return;
+      const assignments: SlabAssignment[] = [];
+      snapshot.forEach(d => assignments.push(d.data() as SlabAssignment));
+      onUpdate(assignments);
+    },
+    (err) => {
+      console.warn('Realtime assignments sync error:', err);
+      if (onError) onError(err);
+    }
+  );
 }
