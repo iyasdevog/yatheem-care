@@ -18,6 +18,7 @@ import {
   Heart,
   LayoutDashboard,
   Printer,
+  GitMerge,
 } from 'lucide-react';
 import type { Dataset } from '../types/data';
 
@@ -27,15 +28,15 @@ interface HeaderProps {
   onSelectDataset: (id: string) => void;
   onOpenImportModal: () => void;
   onOpenAddRowModal: () => void;
-  onLoadSample: (dataset: Dataset) => void;
+  onLoadSample?: (dataset: Dataset) => void;
   onExportCSV: () => void;
   onExportExcel: () => void;
   onCopyGoogleSheets: () => void;
-  activeView: 'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics';
-  onChangeView: (view: 'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics') => void;
+  activeView: 'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics' | 'standardizer';
+  onChangeView: (view: 'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics' | 'standardizer') => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
-  sampleDatasets: Dataset[];
+  sampleDatasets?: Dataset[];
   firebaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
 }
 
@@ -45,7 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectDataset,
   onOpenImportModal,
   onOpenAddRowModal,
-  onLoadSample,
   onExportCSV,
   onExportExcel,
   onCopyGoogleSheets,
@@ -53,11 +53,9 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeView,
   theme,
   onToggleTheme,
-  sampleDatasets,
   firebaseSyncStatus = 'idle',
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showSamplesMenu, setShowSamplesMenu] = useState(false);
   const [copiedState, setCopiedState] = useState(false);
 
   const handleCopySheets = () => {
@@ -171,6 +169,13 @@ export const Header: React.FC<HeaderProps> = ({
             <TableIcon size={16} /> Raw Ledger Table
           </button>
           <button
+            className={`btn btn-sm ${activeView === 'standardizer' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => onChangeView('standardizer')}
+          >
+            <GitMerge size={16} className="text-emerald-400" /> Data Standardizer
+          </button>
+          <button
             className={`btn btn-sm ${activeView === 'analytics' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ whiteSpace: 'nowrap' }}
             onClick={() => onChangeView('analytics')}
@@ -191,52 +196,6 @@ export const Header: React.FC<HeaderProps> = ({
           <button className="btn btn-secondary" onClick={onOpenImportModal}>
             <Upload size={16} /> Import
           </button>
-
-          {/* Sample Datasets Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setShowSamplesMenu(!showSamplesMenu)}
-            >
-              <Sparkles size={16} className="text-amber-400" /> Samples
-            </button>
-            {showSamplesMenu && (
-              <div
-                className="glass-panel"
-                style={{
-                  position: 'absolute',
-                  top: '110%',
-                  right: 0,
-                  width: '260px',
-                  zIndex: 100,
-                  padding: '0.5rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                }}
-              >
-                <div style={{ padding: '0.35rem 0.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                  LOAD SAMPLE GOOGLE FORM DATA
-                </div>
-                {sampleDatasets.map((sample) => (
-                  <button
-                    key={sample.id}
-                    className="btn btn-ghost"
-                    style={{ justifyContent: 'flex-start', textAlign: 'left', width: '100%', fontSize: '0.8125rem' }}
-                    onClick={() => {
-                      onLoadSample(sample);
-                      setShowSamplesMenu(false);
-                    }}
-                  >
-                    <FileSpreadsheet size={16} style={{ minWidth: '16px' }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {sample.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Print Button */}
           <button 

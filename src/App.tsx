@@ -36,6 +36,13 @@ import {
   type DonationSlab,
   type SlabAssignment,
 } from './utils/slabManager';
+import { DonorStandardizer } from './components/DonorStandardizer';
+import {
+  loadDonorAliasMap,
+  saveDonorAliasMap,
+  type DonorAliasMap,
+} from './utils/donorReconciliation';
+import { aggregateDonationData } from './utils/donationAggregator';
 
 const STORAGE_KEY = 'yatheem_donation_datasets_v2';
 const THEME_KEY = 'formflow_studio_theme';
@@ -91,6 +98,14 @@ export const App: React.FC = () => {
       saveAssignmentToFirebase(a)
         .catch(err => console.warn('Assignment Firebase sync error:', err));
     });
+  };
+
+  // Donor Alias & Phone Linking map state
+  const [aliasMap, setAliasMap] = useState<DonorAliasMap>(() => loadDonorAliasMap());
+
+  const handleAliasMapChange = (updated: DonorAliasMap) => {
+    saveDonorAliasMap(updated);
+    setAliasMap(updated);
   };
 
   // Subscribe to Firebase slab & assignment changes (other devices / cloud edits)
@@ -207,7 +222,7 @@ export const App: React.FC = () => {
   }, []);
 
   // View mode
-  const [activeView, setActiveView] = useState<'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'sponsorship' | 'table' | 'grouped' | 'analytics' | 'standardizer'>('dashboard');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -635,6 +650,7 @@ export const App: React.FC = () => {
             }
             slabs={slabs}
             slabAssignments={slabAssignments}
+            aliasMap={aliasMap}
             onSlabsChange={handleSlabsChange}
             onAssignmentsChange={handleAssignmentsChange}
             onAddDonor={handleAddDonor}
@@ -653,6 +669,24 @@ export const App: React.FC = () => {
             allDatasets={datasets}
             slabs={slabs}
             slabAssignments={slabAssignments}
+            aliasMap={aliasMap}
+          />
+        )}
+
+        {activeView === 'standardizer' && (
+          <DonorStandardizer
+            donorRecords={
+              aggregateDonationData(
+                (datasets.find(d => d.id === 'yatheem_transactions') || currentDataset).rows,
+                [],
+                slabAssignments,
+                slabs,
+                undefined,
+                aliasMap
+              ).donorsByPhone
+            }
+            aliasMap={aliasMap}
+            onAliasMapChange={handleAliasMapChange}
           />
         )}
 

@@ -19,6 +19,7 @@ import { aggregateDonationData } from '../utils/donationAggregator';
 import { exportToExcel } from '../utils/csvParser';
 
 import { type DonationSlab, type SlabAssignment } from '../utils/slabManager';
+import { type DonorAliasMap } from '../utils/donorReconciliation';
 
 interface SponsorshipReportProps {
   transactionDataset: Dataset;
@@ -26,12 +27,14 @@ interface SponsorshipReportProps {
   allDatasets?: Dataset[];
   slabs?: DonationSlab[];
   slabAssignments?: SlabAssignment[];
+  aliasMap?: DonorAliasMap;
 }
 
 export const SponsorshipReport: React.FC<SponsorshipReportProps> = ({
   transactionDataset,
   slabs,
   slabAssignments,
+  aliasMap,
 }) => {
   // Active sub-tab mode: 'donors' | 'careof' | 'categories'
   const [activeTab, setActiveTab] = useState<'donors' | 'careof' | 'categories'>('donors');
@@ -50,8 +53,8 @@ export const SponsorshipReport: React.FC<SponsorshipReportProps> = ({
   // Aggregate Data
   const reportData = useMemo(() => {
     const txRows = transactionDataset ? transactionDataset.rows : [];
-    return aggregateDonationData(txRows, [], slabAssignments || [], slabs || []);
-  }, [transactionDataset, slabAssignments, slabs]);
+    return aggregateDonationData(txRows, [], slabAssignments || [], slabs || [], undefined, aliasMap);
+  }, [transactionDataset, slabAssignments, slabs, aliasMap]);
 
   const { summary, donorsByPhone, careOfSummaries } = reportData;
 

@@ -11,6 +11,10 @@ import {
   type DonationSlab,
   getSlabForDonor,
 } from './slabManager';
+import {
+  type DonorAliasMap,
+  getCanonicalPhoneNumber,
+} from './donorReconciliation';
 
 export interface TransactionEntry {
   id: string;
@@ -200,7 +204,8 @@ export function aggregateDonationData(
   _masterRows: RowData[] = [],           // kept for API compat, ignored
   slabAssignments: SlabAssignment[] = [],
   slabs: DonationSlab[] = [],
-  dateRange?: DateRangeFilter
+  dateRange?: DateRangeFilter,
+  aliasMap?: DonorAliasMap
 ): DonationReportData {
   let transactions = parseTransactions(transactionRows);
 
@@ -216,14 +221,19 @@ export function aggregateDonationData(
     });
   }
 
-  // Group transactions by normalized phone number
+  // Group transactions by normalized/canonical phone number
   // Fallback key: use name when phone is missing
   const donorMap = new Map<string, DonorRecord>();
 
   transactions.forEach((tx, idx) => {
-    const phoneNorm = normalizePhoneNumber(tx.contact1)
-      || normalizePhoneNumber(tx.contact2)
-      || `name_${tx.name.toLowerCase().replace(/\s+/g, '_')}_${idx}`;
+    const rawPhone = tx.contact1 || tx.contact2 || '';
+    let phoneNorm = aliasMap ? getCanonicalPhoneNumber(rawPhone, aliasMap) : normalizePhoneNumber(rawPhone);
+    if (!phoneNorm) {
+      phoneNorm = `name_${tx.name.toLowerCase().replace(/\s+/g, '_')}_${idx}`;
+    }
+
+    // Override donor name if a canonical primary name exists in alias map
+    const preferredName = (aliasMap?.primaryNames && aliasMap.primaryNames[phoneNorm]) || tx.name;
 
     if (!donorMap.has(phoneNorm)) {
       // First time seeing this donor — create record
@@ -240,7 +250,7 @@ export function aggregateDonationData(
         id: `donor_${phoneNorm}`,
         phoneNumber: tx.contact1 || tx.contact2 || 'N/A',
         rawPhone: phoneNorm,
-        donorName: tx.name !== 'Unknown' ? tx.name : '',
+        donorName: preferredName !== 'Unknown' ? preferredName : '',
         careOf: tx.careOf || 'Direct',
         address: '',
         sponsorshipCategory: slabMatch?.displayLabel ?? 'Unassigned',

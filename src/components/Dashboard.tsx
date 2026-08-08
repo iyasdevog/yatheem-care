@@ -28,10 +28,13 @@ import {
 } from '../utils/slabManager';
 import { SlabManager } from './SlabManager';
 
+import { type DonorAliasMap } from '../utils/donorReconciliation';
+
 interface DashboardProps {
   transactionDataset: Dataset;
   slabs: DonationSlab[];
   slabAssignments: SlabAssignment[];
+  aliasMap?: DonorAliasMap;
   onSlabsChange: (slabs: DonationSlab[]) => void;
   onAssignmentsChange: (assignments: SlabAssignment[]) => void;
   onAddDonor: (donor: NewDonorForm) => void;
@@ -1254,6 +1257,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   transactionDataset,
   slabs,
   slabAssignments,
+  aliasMap,
   onSlabsChange,
   onAssignmentsChange,
   onAddDonor,
@@ -1310,8 +1314,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const reportData = useMemo(() => {
     const txRows = transactionDataset?.rows ?? [];
-    return aggregateDonationData(txRows, [], slabAssignments, slabs, dateRange);
-  }, [transactionDataset, slabAssignments, slabs, dateRange]);
+    return aggregateDonationData(txRows, [], slabAssignments, slabs, dateRange, aliasMap);
+  }, [transactionDataset, slabAssignments, slabs, dateRange, aliasMap]);
 
   const { summary, donorsByPhone, careOfSummaries } = reportData;
 
