@@ -550,8 +550,54 @@ h1, h2, h3, h4, h5, h6 {
     width: 38px;
   }
 
-  .badge {
-    font-size: 0.65rem;
+}
+
+/* ==========================================================================
+   Print Styles
+   ========================================================================== */
+@media print {
+  /* Hide UI elements that shouldn't be printed */
+  header, 
+  .toast-container,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset background and text color for printer ink saving */
+  body, .app-wrapper, .glass-panel {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Text should be completely black and sans-serif */
+  * {
+    color: black !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+  }
+
+  /* Make sure tables are printed fully */
+  .table-container {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  th, td {
+    border: 1px solid #ccc !important;
+    padding: 8px !important;
   }
 }
 

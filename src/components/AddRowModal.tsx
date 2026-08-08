@@ -44,9 +44,14 @@ export const AddRowModal: React.FC<AddRowModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanFormData: Record<string, any> = {};
+    columns.forEach(col => {
+      cleanFormData[col.id] = formData[col.id] ?? '';
+    });
+
     const newRow: RowData = {
       _id: `row_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      ...formData,
+      ...cleanFormData,
     };
 
     onAddRow(newRow);

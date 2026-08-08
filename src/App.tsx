@@ -25,6 +25,7 @@ import {
   saveSlabs,
   loadSlabAssignments,
   saveSlabAssignments,
+  assignDonorToSlab,
   type DonationSlab,
   type SlabAssignment,
 } from './utils/slabManager';
@@ -106,18 +107,34 @@ export const App: React.FC = () => {
 
   // Load current Yatheem Excel dataset & sync with Firebase
   useEffect(() => {
-    loadYatheemExcelWorkbook().then((wb) => {
-      if (wb) {
-        // Only transaction dataset now — template sheet is ignored
-        const yatheemDatasets = [wb.transactionDataset];
-        setDatasets(yatheemDatasets);
-        setActiveDatasetId(wb.transactionDataset.id);
+    // Only load from Excel if we have no local datasets at all
+    if (datasets.length === 0) {
+      loadYatheemExcelWorkbook().then((wb) => {
+        if (wb) {
+          // Only transaction dataset now — template sheet is ignored
+          const yatheemDatasets = [wb.transactionDataset];
+          setDatasets(yatheemDatasets);
+          setActiveDatasetId(wb.transactionDataset.id);
 
-        syncAllDatasetsToFirebase(yatheemDatasets).catch(err =>
-          console.warn('Firebase sync notice:', err)
-        );
-      }
-    });
+          syncAllDatasetsToFirebase(yatheemDatasets).catch(err =>
+            console.warn('Firebase sync notice:', err)
+          );
+        }
+      });
+    } else {
+      // We have local datasets that might not have synced successfully to Firebase previously.
+      // Force a sync to cloud now that sanitizeForFirebase is implemented.
+      setFirebaseSyncStatus('syncing');
+      syncAllDatasetsToFirebase(datasets)
+        .then(() => {
+          setFirebaseSyncStatus('synced');
+          setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
+        })
+        .catch(err => {
+          console.warn('Firebase sync notice:', err);
+          setFirebaseSyncStatus('error');
+        });
+    }
 
     // Real-time listener for Firebase Firestore updates
     const unsubscribe = subscribeToFirebaseDatasets((remoteDatasets) => {
@@ -326,18 +343,34 @@ export const App: React.FC = () => {
     };
 
     setDatasets(prev => prev.map(d => (d.id === txDs.id ? updatedDs : d)));
+    
+    // Auto-assign slab if selected
+    if (newDonor.slabId && newDonor.phone) {
+      handleAssignmentsChange(assignDonorToSlab(
+        slabAssignments,
+        newDonor.phone,
+        newDonor.slabId,
+        newDonor.slabUnits || 1
+      ));
+    }
+
     setFirebaseSyncStatus('syncing');
     saveDatasetToFirebase(updatedDs)
       .then(() => {
         setFirebaseSyncStatus('synced');
         setTimeout(() => setFirebaseSyncStatus('idle'), 3000);
       })
-      .catch(() => setFirebaseSyncStatus('error'));
+      .catch((err) => {
+        console.error("Firebase sync error:", err);
+        setFirebaseSyncStatus('error');
+      });
 
     addToast(
       'success',
       'Donor Added!',
-      `${newDonor.name} added — assign a slab from the Slab Manager`
+      newDonor.slabId
+        ? `${newDonor.name} assigned ${newDonor.slabUnits || 1}x ${newDonor.sponsorshipCategory.split('–')[0]?.trim()}`
+        : `${newDonor.name} added — assign a slab from the Slab Manager`
     );
   };
 

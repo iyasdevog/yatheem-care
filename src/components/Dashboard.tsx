@@ -17,12 +17,14 @@ import {
   Calendar,
   ArrowUpDown,
   Trash2,
+  Check,
 } from 'lucide-react';
 import type { Dataset } from '../types/data';
 import { aggregateDonationData, type DonorRecord, type CareOfSummary, type TransactionEntry, type DateRangeFilter } from '../utils/donationAggregator';
 import {
   type DonationSlab,
   type SlabAssignment,
+  DEFAULT_SLABS,
 } from '../utils/slabManager';
 import { SlabManager } from './SlabManager';
 
@@ -46,6 +48,8 @@ export interface NewDonorForm {
   sponsorshipAmount: number;
   sponsorshipCategory: string;
   startDate: string;
+  slabId?: string;
+  slabUnits?: number;
 }
 
 type DrillDown = 
@@ -55,16 +59,6 @@ type DrillDown =
   | { view: 'add_donor' }
   | { view: 'search_results'; query: string }
   | { view: 'status_list'; status: 'started' | 'not_started' | 'expiring' | 'fully_paid' };
-
-const SPONSORSHIP_OPTIONS = [
-  { label: 'Education – Full (₹50,000)', value: 50000 },
-  { label: 'Education – Half (₹25,000)', value: 25000 },
-  { label: 'Education – Quarter (₹12,500)', value: 12500 },
-  { label: 'Food – Full (₹30,000)', value: 30000 },
-  { label: 'Food – Half (₹15,000)', value: 15000 },
-  { label: 'Food – Quarter (₹7,500)', value: 7500 },
-  { label: 'Custom Amount', value: 0 },
-];
 
 function formatINR(amount: number) {
   return '₹' + amount.toLocaleString('en-IN');
@@ -89,20 +83,26 @@ function StatusDot({ status }: { status: string }) {
 }
 
 // ── ADD DONOR MODAL ──────────────────────────────────────────────────────────
-function AddDonorSheet({ onClose, onSubmit, existingCareOfs, existingDonors }: {
+function AddDonorSheet({ onClose, onSubmit, existingCareOfs, existingDonors, slabs = [] }: {
   onClose: () => void;
   onSubmit: (form: NewDonorForm) => void;
   existingCareOfs: string[];
   existingDonors: { phone: string; name: string; careOf: string }[];
+  slabs?: DonationSlab[];
 }) {
+  const activeSlabs = slabs.length > 0 ? slabs : DEFAULT_SLABS;
+  const initialSlab = activeSlabs[0];
+
   const [form, setForm] = useState<NewDonorForm>({
     name: '',
     phone: '',
     careOf: '',
     address: '',
-    sponsorshipAmount: 12500,
-    sponsorshipCategory: 'Education – Quarter (₹12,500)',
+    sponsorshipAmount: initialSlab ? initialSlab.amount : 50000,
+    sponsorshipCategory: initialSlab ? `${initialSlab.category} – ${initialSlab.label} (${formatINR(initialSlab.amount)})` : 'Education – Full',
     startDate: new Date().toISOString().slice(0, 10),
+    slabId: initialSlab?.id,
+    slabUnits: 1,
   });
   const [customAmt, setCustomAmt] = useState(false);
   const [step, setStep] = useState(1);
@@ -119,25 +119,44 @@ function AddDonorSheet({ onClose, onSubmit, existingCareOfs, existingDonors }: {
     }
   };
 
-  const handleSponsorChange = (val: number) => {
-    if (val === 0) {
-      setCustomAmt(true);
-      set('sponsorshipAmount', 0);
-      set('sponsorshipCategory', 'Custom Sponsorship');
-    } else {
-      setCustomAmt(false);
-      const opt = SPONSORSHIP_OPTIONS.find(o => o.value === val);
-      set('sponsorshipAmount', val);
-      set('sponsorshipCategory', opt?.label || '');
-    }
+  const handleSelectSlab = (s: DonationSlab) => {
+    setCustomAmt(false);
+    const units = form.slabUnits || 1;
+    setForm(f => ({
+      ...f,
+      slabId: s.id,
+      sponsorshipAmount: s.amount * units,
+      sponsorshipCategory: `${s.category} – ${s.label} (${formatINR(s.amount)})`,
+    }));
   };
 
+  const handleCustomSponsor = () => {
+    setCustomAmt(true);
+    setForm(f => ({
+      ...f,
+      slabId: undefined,
+      sponsorshipAmount: f.sponsorshipAmount || 0,
+      sponsorshipCategory: 'Custom Sponsorship',
+    }));
+  };
+
+  const handleUnitsChange = (newUnits: number) => {
+    const validUnits = Math.max(1, newUnits);
+    const selectedSlab = activeSlabs.find(s => s.id === form.slabId);
+    setForm(f => ({
+      ...f,
+      slabUnits: validUnits,
+      sponsorshipAmount: selectedSlab ? selectedSlab.amount * validUnits : f.sponsorshipAmount,
+    }));
+  };
+
+  const selectedSlabObj = activeSlabs.find(s => s.id === form.slabId);
   const canProceed1 = form.name.trim().length > 1;
   const canProceed2 = form.sponsorshipAmount > 0;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+      <div className="modal-container" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -257,37 +276,144 @@ function AddDonorSheet({ onClose, onSubmit, existingCareOfs, existingDonors }: {
             </>
           )}
 
-          {/* Step 2 – Sponsorship */}
+          {/* Step 2 – Sponsorship & Slab Multiplier */}
           {step === 2 && (
             <>
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>
-                  Sponsorship Type *
+                  Sponsorship Slab *
                 </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {SPONSORSHIP_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleSponsorChange(opt.value)}
-                      style={{
-                        padding: '0.75rem 1rem',
-                        borderRadius: 'var(--radius-md)',
-                        border: `1.5px solid ${(!customAmt && form.sponsorshipAmount === opt.value) || (customAmt && opt.value === 0) ? 'var(--accent-primary)' : 'var(--border-color)'}`,
-                        background: (!customAmt && form.sponsorshipAmount === opt.value) || (customAmt && opt.value === 0) ? 'rgba(99,102,241,0.15)' : 'var(--bg-tertiary)',
-                        color: '#ffffff',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        fontWeight: 700,
-                        fontSize: '0.875rem',
-                        fontFamily: 'inherit',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' }}>
+                  {activeSlabs.map(s => {
+                    const isSelected = !customAmt && form.slabId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleSelectSlab(s)}
+                        style={{
+                          padding: '0.75rem 1rem',
+                          borderRadius: 'var(--radius-md)',
+                          border: `1.5px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                          background: isSelected ? 'rgba(99,102,241,0.15)' : 'var(--bg-tertiary)',
+                          color: '#ffffff',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontWeight: 700,
+                          fontSize: '0.875rem',
+                          fontFamily: 'inherit',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div>
+                          <span>{s.category} – {s.label}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: 8 }}>
+                            ({formatINR(s.amount)} / {s.unit})
+                          </span>
+                        </div>
+                        {isSelected && <Check size={18} color="var(--accent-primary)" />}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={handleCustomSponsor}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1.5px solid ${customAmt ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                      background: customAmt ? 'rgba(99,102,241,0.15)' : 'var(--bg-tertiary)',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      fontFamily: 'inherit',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span>Custom Amount</span>
+                    {customAmt && <Check size={18} color="var(--accent-primary)" />}
+                  </button>
                 </div>
               </div>
+
+              {/* Slab Count / Quantity Selector */}
+              {!customAmt && form.slabId && selectedSlabObj && (
+                <div style={{ marginTop: '0.85rem', padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>
+                    Slab Quantity / Count (e.g. 3 × {formatINR(selectedSlabObj.amount)})
+                  </label>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {/* Quick Pick Pills */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[1, 2, 3, 4, 5].map(cnt => (
+                        <button
+                          key={cnt}
+                          type="button"
+                          className="btn btn-sm"
+                          style={{
+                            minWidth: 40,
+                            fontWeight: 800,
+                            background: form.slabUnits === cnt ? 'var(--accent-primary)' : 'var(--bg-secondary)',
+                            color: form.slabUnits === cnt ? '#ffffff' : 'var(--text-primary)',
+                            border: form.slabUnits === cnt ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                          }}
+                          onClick={() => handleUnitsChange(cnt)}
+                        >
+                          {cnt}x
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Stepper buttons & Custom Count Input */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '0.25rem 0.65rem', fontWeight: 800 }}
+                        onClick={() => handleUnitsChange((form.slabUnits || 1) - 1)}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        className="input-field"
+                        style={{ width: 64, textAlign: 'center', fontWeight: 800, padding: '0.35rem 0.5rem' }}
+                        value={form.slabUnits || 1}
+                        onChange={e => handleUnitsChange(parseInt(e.target.value) || 1)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '0.25rem 0.65rem', fontWeight: 800 }}
+                        onClick={() => handleUnitsChange((form.slabUnits || 1) + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Calculation summary banner */}
+                  <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px dashed var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                      Calculation: <strong>{form.slabUnits || 1}</strong> × {formatINR(selectedSlabObj.amount)}
+                    </span>
+                    <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#10b981' }}>
+                      Target: {formatINR(form.sponsorshipAmount)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {customAmt && (
                 <div>
                   <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
@@ -296,7 +422,7 @@ function AddDonorSheet({ onClose, onSubmit, existingCareOfs, existingDonors }: {
                   <input
                     className="input-field"
                     type="number"
-                    placeholder="Enter amount"
+                    placeholder="Enter custom amount"
                     value={form.sponsorshipAmount || ''}
                     onChange={e => set('sponsorshipAmount', Number(e.target.value))}
                     autoFocus
@@ -328,7 +454,8 @@ function AddDonorSheet({ onClose, onSubmit, existingCareOfs, existingDonors }: {
                   ['Phone', form.phone || 'Not provided'],
                   ['Care Of (C/O)', form.careOf || 'Direct / Unassigned'],
                   ['Address', form.address || '—'],
-                  ['Sponsorship', form.sponsorshipCategory],
+                  ['Sponsorship Slab', form.sponsorshipCategory],
+                  ['Slab Quantity / Count', `${form.slabUnits || 1} unit(s)`],
                   ['Committed Target', formatINR(form.sponsorshipAmount)],
                   ['Start Date', form.startDate],
                 ].map(([k, v]) => (

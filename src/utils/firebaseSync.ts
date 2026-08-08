@@ -12,16 +12,45 @@ import type { Dataset } from '../types/data';
 const DATASETS_COLLECTION = 'datasets';
 
 /**
+ * Recursively removes undefined values from an object or array,
+ * replacing undefined with null or omitting undefined keys,
+ * so that Firebase Firestore setDoc/updateDoc never throws "Unsupported field value: undefined".
+ */
+export function sanitizeForFirebase<T>(val: T): T {
+  if (val === undefined) {
+    return null as unknown as T;
+  }
+  if (val === null || typeof val !== 'object') {
+    return val;
+  }
+  if (val instanceof Date) {
+    return val.toISOString() as unknown as T;
+  }
+  if (Array.isArray(val)) {
+    return val.map(item => sanitizeForFirebase(item)) as unknown as T;
+  }
+
+  const cleanObj: Record<string, any> = {};
+  for (const [key, value] of Object.entries(val)) {
+    if (value !== undefined) {
+      cleanObj[key] = sanitizeForFirebase(value);
+    }
+  }
+  return cleanObj as T;
+}
+
+/**
  * Saves or updates a dataset in Firebase Firestore
  */
 export async function saveDatasetToFirebase(dataset: Dataset): Promise<void> {
   try {
-    const docRef = doc(db, DATASETS_COLLECTION, dataset.id);
+    const cleanData = sanitizeForFirebase(dataset);
+    const docRef = doc(db, DATASETS_COLLECTION, cleanData.id);
     await setDoc(docRef, {
-      ...dataset,
+      ...cleanData,
       lastSyncedAt: serverTimestamp(),
     }, { merge: true });
-    console.log(`Dataset ${dataset.name} (${dataset.id}) saved to Firebase.`);
+    console.log(`Dataset ${cleanData.name} (${cleanData.id}) saved to Firebase.`);
   } catch (error) {
     console.error('Failed to save dataset to Firebase:', error);
     throw error;

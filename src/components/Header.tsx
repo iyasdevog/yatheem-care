@@ -17,6 +17,7 @@ import {
   Loader2,
   Heart,
   LayoutDashboard,
+  Printer,
 } from 'lucide-react';
 import type { Dataset } from '../types/data';
 
@@ -236,6 +237,15 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
           </div>
+
+          {/* Print Button */}
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => window.print()}
+            title="Print Current View"
+          >
+            <Printer size={16} /> Print
+          </button>
 
           {/* Export Dropdown */}
           <div style={{ position: 'relative' }}>
